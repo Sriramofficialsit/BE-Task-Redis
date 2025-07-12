@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 const cors = require("cors");
 const redis = require("redis");
-const { authMiddleware } = require("./middleware/authMiddleware");
 const userRoutes = require("./routes/auth");
 
 const app = express();
@@ -17,45 +16,41 @@ app.use(
   })
 );
 
-// Redis client setup
+// --- Redis client setup (with TLS for Upstash) ---
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
+  socket: {
+    tls: true
+  }
 });
 
-redisClient.on("error", (err) => console.log("Redis Client Error", err));
+redisClient.on("error", (err) => console.error("Redis Client Error", err));
 
-// Routes
-app.use("/api", userRoutes);
+// --- Health check route ---
 app.get("/", (req, res) => {
-  app.get("/", (req, res) => {
-    console.log("Root endpoint accessed");
-    return res.json({
-      message: "Hii",
-      success: true,
-    });
-  });
+  console.log("Root endpoint accessed");
   return res.json({
     message: "Hii",
     success: true,
   });
 });
 
+// --- Mount routes with access to redisClient via req.app ---
+app.use((req, res, next) => {
+  req.app.set("redisClient", redisClient);
+  next();
+});
+app.use("/api", userRoutes);
+
+// --- Start server ---
 const startServer = async () => {
   try {
-    // Connect to Redis
     await redisClient.connect();
     console.log("Redis connected");
 
-    // Connect to MongoDB
-    await mongoose.connect(
-      process.env.MONGO_URI || "mongodb://localhost:27017/rentalapp"
-    );
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected");
 
-    // Set Redis client on app
-    app.set("redisClient", redisClient);
-
-    // Start server
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (err) {
@@ -66,7 +61,7 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown
+// --- Graceful shutdown ---
 process.on("SIGINT", async () => {
   await redisClient.quit();
   await mongoose.connection.close();
