@@ -16,7 +16,7 @@ app.use(
   })
 );
 
-// --- Redis client setup (with TLS for Upstash) ---
+
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
   socket: {
@@ -26,7 +26,7 @@ const redisClient = redis.createClient({
 
 redisClient.on("error", (err) => console.error("Redis Client Error", err));
 
-// --- Health check route ---
+
 app.get("/", (req, res) => {
   console.log("Root endpoint accessed");
   return res.json({
@@ -35,14 +35,14 @@ app.get("/", (req, res) => {
   });
 });
 
-// --- Mount routes with access to redisClient via req.app ---
+
 app.use((req, res, next) => {
   req.app.set("redisClient", redisClient);
   next();
 });
 app.use("/api", userRoutes);
 
-// --- Start server ---
+
 const startServer = async () => {
   try {
     await redisClient.connect();
@@ -61,7 +61,7 @@ const startServer = async () => {
 
 startServer();
 
-// --- Graceful shutdown ---
+
 process.on("SIGINT", async () => {
   await redisClient.quit();
   await mongoose.connection.close();
